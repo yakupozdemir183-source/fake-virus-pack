@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<title>A Çoğaltıcı — Eğlence</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  html,body{height:100%;margin:0;font-family:system-ui,Arial}
+  .stage{
+    position:relative;
+    width:100%;
+    height:100vh;
+    overflow:hidden;
+    background:linear-gradient(180deg,#fff,#f2f7ff);
+    cursor:default;
+  }
+  .controls{
+    position:fixed; left:12px; top:12px; z-index:9999;
+    background:rgba(255,255,255,0.9); padding:8px 10px; border-radius:8px;
+    box-shadow:0 6px 20px rgba(0,0,0,0.08); font-size:14px;
+  }
+  .btn{border:none;padding:6px 8px;border-radius:6px;background:#4f46e5;color:white;cursor:pointer;margin-right:6px}
+  .btn.secondary{background:#ef4444}
+  .info{font-size:13px;color:#333;margin-top:6px}
+  .letter{
+    position:absolute;
+    user-select:none;
+    -webkit-user-select:none;
+    font-size:34px;
+    font-weight:700;
+    color:#111;
+    padding:6px 8px;
+    border-radius:8px;
+    background:rgba(255,255,255,0.7);
+    box-shadow:0 6px 18px rgba(8,15,30,0.08);
+    transition: left 0.7s ease, top 0.7s ease, transform 0.25s ease;
+    cursor:pointer;
+  }
+  .letter:active{transform:scale(0.95)}
+  .limit-note{color:#b91c1c;font-weight:600;margin-left:6px}
+</style>
+</head>
+<body>
+  <div class="controls" aria-hidden="false">
+    <button class="btn" id="resetBtn">Temizle</button>
+    <label style="font-size:13px">Maks: <input id="maxInput" type="number" min="10" max="2000" value="400" style="width:72px;margin-left:6px"></label>
+    <div class="info">Not: Harflere tıklayın — sadece onlara basınca çoğalır.</div>
+  </div>
+
+  <div class="stage" id="stage" tabindex="-1" aria-label="Etkinlik alanı"></div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const resetBtn = document.getElementById('resetBtn');
+  const maxInput = document.getElementById('maxInput');
+  let MAX = parseInt(maxInput.value,10) || 400;
+
+  // Yardımcı: rastgele sayı
+  function rand(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+
+  // Rastgele koordinat, içeriği stage içinde görünür tutacak şekilde
+  function randomPos(elw,elh){
+    const pad = 8;
+    const W = stage.clientWidth - elw - pad;
+    const H = stage.clientHeight - elh - pad;
+    return {
+      left: Math.max(pad, rand(0, Math.max(0,W))) + 'px',
+      top:  Math.max(pad, rand(0, Math.max(0,H))) + 'px'
+    };
+  }
+
+  // Yeni bir 'a' oluştur
+  function makeA(x, y){
+    if (stage.children.length >= MAX) {
+      // kısa uyarı
+      flashLimit();
+      return null;
+    }
+    const s = document.createElement('div');
+    s.className = 'letter';
+    s.textContent = 'a';
+    stage.appendChild(s);
+
+    // boyutunu ölç ve pozisyon ver
+    requestAnimationFrame(()=>{
+      const w = s.offsetWidth, h = s.offsetHeight;
+      if (typeof x === 'number' && typeof y === 'number') {
+        // tıklanan konuma göre hafif rastgele ofset
+        const px = Math.min(stage.clientWidth - w - 6, Math.max(6, x + rand(-12,12)));
+        const py = Math.min(stage.clientHeight - h - 6, Math.max(6, y + rand(-12,12)));
+        s.style.left = px + 'px';
+        s.style.top = py + 'px';
+      } else {
+        const pos = randomPos(w,h);
+        s.style.left = pos.left;
+        s.style.top = pos.top;
+      }
+    });
+
+    // tıklanınca çoğal
+    s.addEventListener('click', (ev)=>{
+      ev.stopPropagation(); // stage'e yayılmasın
+      // Var olanın yakınında yeni bir tane oluştur
+      const rect = s.getBoundingClientRect();
+      const stagerect = stage.getBoundingClientRect();
+      // koordinatları stage koordinatına çevir
+      const cx = rect.left - stagerect.left + rect.width/2;
+      const cy = rect.top - stagerect.top + rect.height/2;
+      makeA(cx + rand(-10,10), cy + rand(-10,10));
+    });
+
+    // sağ tıklayınca sil (isteğe bağlı); kullanıcının kontrolü için
+    s.addEventListener('contextmenu', (ev)=>{
+      ev.preventDefault();
+      s.remove();
+    });
+
+    return s;
+  }
+
+  // Başlangıçta ortada bir 'a'
+  function init(){
+    stage.innerHTML = '';
+    const start = makeA(); // rastgele pozisyonda
+    // merkezde istiyorsak:
+    if (start){
+      const w = start.offsetWidth, h = start.offsetHeight;
+      start.style.left = (stage.clientWidth/2 - w/2) + 'px';
+      start.style.top  = (stage.clientHeight/2 - h/2) + 'px';
+    }
+  }
+
+  // Elemanları rastgele yerlere taşıyan döngü
+  function roam(){
+    const letters = Array.from(stage.getElementsByClassName('letter'));
+    letters.forEach(el=>{
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const pos = randomPos(w,h);
+      // hafif varyasyonla taşı
+      el.style.left = pos.left;
+      el.style.top  = pos.top;
+    });
+  }
+
+  // Limit aşıldığında kısa görsel uyarı
+  let limitFlashTimeout = null;
+  function flashLimit(){
+    if (limitFlashTimeout) return;
+    const note = document.createElement('div');
+    note.textContent = 'Üst sınır ulaşıldı';
+    note.style.position='fixed';
+    note.style.right='12px';
+    note.style.top='12px';
+    note.style.background='rgba(184,28,28,0.95)';
+    note.style.color='white';
+    note.style.padding='8px 10px';
+    note.style.borderRadius='8px';
+    note.style.zIndex = 99999;
+    document.body.appendChild(note);
+    limitFlashTimeout = setTimeout(()=>{ note.remove(); limitFlashTimeout=null; }, 1200);
+  }
+
+  // Periyodik roam
+  let roamInterval = setInterval(roam, 1200);
+
+  // Reset
+  resetBtn.addEventListener('click', ()=> init());
+
+  // Update max from input
+  maxInput.addEventListener('change', ()=> {
+    const v = parseInt(maxInput.value,10);
+    if (!isNaN(v) && v >= 10) {
+      MAX = v;
+    } else {
+      maxInput.value = MAX;
+    }
+  });
+
+  // Stage tıklanırsa hiçbir şeye neden olmasın (sadece bilgi)
+  stage.addEventListener('click', (ev)=> {
+    // boş bırak — sadece harflere tıklayınca çoğalsın
+  });
+
+  // Responsive: pencere boyutu değişince harflerin taşma ihtimaline karşı onları tekrar sınırla
+  window.addEventListener('resize', () => {
+    // kısaca tüm elemanları sahaya sığdır
+    const letters = Array.from(stage.getElementsByClassName('letter'));
+    letters.forEach(el=>{
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const left = parseInt(el.style.left || 0,10);
+      const top = parseInt(el.style.top || 0,10);
+      const maxL = Math.max(6, stage.clientWidth - w - 6);
+      const maxT = Math.max(6, stage.clientHeight - h - 6);
+      el.style.left = Math.min(left, maxL) + 'px';
+      el.style.top  = Math.min(top, maxT) + 'px';
+    });
+  });
+
+  // Başlat
+  init();
+
+  // Temiz kapanış (sayfa kapatılırken interval temizle)
+  window.addEventListener('beforeunload', ()=> clearInterval(roamInterval));
+})();
+</script>
+</body>
+</html>

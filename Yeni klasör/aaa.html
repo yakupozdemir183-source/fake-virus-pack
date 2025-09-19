@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<title>Köşe A — Çoğaltma</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  html,body{height:100%;margin:0;font-family:system-ui,Arial}
+  .stage{
+    position:relative;
+    width:100%;
+    height:100vh;
+    overflow:hidden;
+    background:linear-gradient(180deg,#fff,#f7fbff);
+  }
+  /* Sabit köşe 'a' */
+  .seed{
+    position:fixed; /* sabit köşede */
+    left:12px;
+    top:12px;
+    z-index:9999;
+    font-size:36px;
+    font-weight:800;
+    padding:6px 10px;
+    border-radius:8px;
+    background:rgba(255,255,255,0.9);
+    box-shadow:0 8px 20px rgba(0,0,0,0.08);
+    cursor:pointer;
+    user-select:none;
+  }
+  .letter{
+    position:absolute;
+    user-select:none;
+    font-size:34px;
+    font-weight:700;
+    color:#111;
+    padding:6px 8px;
+    border-radius:8px;
+    background:rgba(255,255,255,0.8);
+    box-shadow:0 6px 18px rgba(8,15,30,0.06);
+    transition: left 0.9s ease, top 0.9s ease, transform 0.2s ease;
+    cursor:pointer;
+  }
+  .controls{
+    position:fixed; right:12px; top:12px; z-index:9999;
+    background:rgba(255,255,255,0.95); padding:8px 10px; border-radius:8px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.06); font-size:13px;
+  }
+  .btn{border:none;padding:6px 8px;border-radius:6px;background:#2563eb;color:white;cursor:pointer}
+</style>
+</head>
+<body>
+  <div class="stage" id="stage" aria-label="Etkinlik alanı"></div>
+
+  <!-- Sabit köşe a -->
+  <div class="seed" id="seed" title="Bana tıkla, çoğalırım">a</div>
+
+  <div class="controls" aria-hidden="false">
+    <button class="btn" id="clearBtn">Temizle</button>
+    <label style="margin-left:8px">Maks: <input id="max" type="number" min="10" max="2000" value="400" style="width:70px"></label>
+  </div>
+
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  const seed = document.getElementById('seed');
+  const clearBtn = document.getElementById('clearBtn');
+  const maxInput = document.getElementById('max');
+  let MAX = parseInt(maxInput.value,10) || 400;
+
+  function rand(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+
+  // Rastgele pozisyon stage içinde, eleman boyutunu hesaba katar
+  function randomPos(elw,elh){
+    const pad = 8;
+    const W = stage.clientWidth - elw - pad;
+    const H = stage.clientHeight - elh - pad;
+    return {
+      left: Math.max(pad, rand(0, Math.max(0,W))) + 'px',
+      top:  Math.max(pad, rand(0, Math.max(0,H))) + 'px'
+    };
+  }
+
+  // Yeni 'a' oluştur (çoğalanlar)
+  function makeA(x, y){
+    if (stage.getElementsByClassName('letter').length >= MAX) return;
+    const s = document.createElement('div');
+    s.className = 'letter';
+    s.textContent = 'a';
+    stage.appendChild(s);
+
+    requestAnimationFrame(()=>{
+      const w = s.offsetWidth, h = s.offsetHeight;
+      if (typeof x === 'number' && typeof y === 'number'){
+        // mouse/seed konumuna yakın (stage koordinatına çevirilmiş)
+        const px = Math.min(stage.clientWidth - w - 6, Math.max(6, x + rand(-14,14)));
+        const py = Math.min(stage.clientHeight - h - 6, Math.max(6, y + rand(-14,14)));
+        s.style.left = px + 'px';
+        s.style.top  = py + 'px';
+      } else {
+        const pos = randomPos(w,h);
+        s.style.left = pos.left;
+        s.style.top  = pos.top;
+      }
+    });
+
+    // Tıklanınca, o harfin etrafında yeni bir tane oluştur
+    s.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      const rect = s.getBoundingClientRect();
+      const stagerect = stage.getBoundingClientRect();
+      const cx = rect.left - stagerect.left + rect.width/2;
+      const cy = rect.top - stagerect.top + rect.height/2;
+      makeA(cx, cy);
+    });
+
+    // Sağ tıklayınca sil
+    s.addEventListener('contextmenu', (ev)=>{
+      ev.preventDefault();
+      s.remove();
+    });
+
+    return s;
+  }
+
+  // Seed'e tıklanınca çoğalt (seed sabit, köşede)
+  seed.addEventListener('click', (ev)=>{
+    // seed'in ekran koordinatlarını stage koordinatına çevir
+    const rect = seed.getBoundingClientRect();
+    const stagerect = stage.getBoundingClientRect();
+    const cx = rect.left - stagerect.left + rect.width/2;
+    const cy = rect.top - stagerect.top + rect.height/2;
+    // birden fazla oluşturmak istersen burayı artırabilirsin
+    makeA(cx + rand(-6,6), cy + rand(-6,6));
+  });
+
+  // Harfleri aralıklı hafifçe rastgele taşı (çoğalanlar)
+  function roam(){
+    const letters = Array.from(stage.getElementsByClassName('letter'));
+    letters.forEach(el=>{
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const pos = randomPos(w,h);
+      // Seed (sabit köşedeki) letter'ı stage içinde olmadığı için burada yok — yalnızca çoğalanlar etki görür
+      el.style.left = pos.left;
+      el.style.top  = pos.top;
+    });
+  }
+  let roamInterval = setInterval(roam, 1400);
+
+  // Temizle butonu
+  clearBtn.addEventListener('click', ()=> {
+    stage.innerHTML = '';
+  });
+
+  // MAX güncelleme
+  maxInput.addEventListener('change', ()=> {
+    const v = parseInt(maxInput.value,10);
+    if (!isNaN(v) && v >= 10) MAX = v; else maxInput.value = MAX;
+  });
+
+  // Pencere yeniden boyutlanınca elemanları sınırla
+  window.addEventListener('resize', ()=>{
+    const letters = Array.from(stage.getElementsByClassName('letter'));
+    letters.forEach(el=>{
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const left = parseInt(el.style.left||0,10);
+      const top  = parseInt(el.style.top||0,10);
+      const maxL = Math.max(6, stage.clientWidth - w - 6);
+      const maxT = Math.max(6, stage.clientHeight - h - 6);
+      el.style.left = Math.min(left, maxL) + 'px';
+      el.style.top  = Math.min(top, maxT) + 'px';
+    });
+  });
+
+  // Başlangıçta hiçbir çoğalan yok; seed sabit köşede hazır
+})();
+</script>
+</body>
+</html>
